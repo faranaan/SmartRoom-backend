@@ -22,6 +22,9 @@ namespace SmartRoom.API.Data
             modelBuilder.Entity<Booking>().Property(b => b.Status).HasConversion<string>();
             modelBuilder.Entity<BookingLog>().Property(bl => bl.Action).HasConversion<string>();
 
+            modelBuilder.Entity<Booking>().Property(b => b.StartTime).HasColumnType("timestamp with time zone");
+            modelBuilder.Entity<Booking>().Property(b => b.EndTime).HasColumnType("timestamp with time zone");
+
             modelBuilder.Entity<Room>().HasData(
                 new Room { Id = 1, RoomName = "Classroom 101", Capacity = 30, Type = RoomType.Classroom, Building = BuildingType.TowerA, IsAvailable = true },
                 new Room { Id = 2, RoomName = "Laboratory 202", Capacity = 20, Type = RoomType.Laboratory, Building = BuildingType.TowerB, IsAvailable = true },
