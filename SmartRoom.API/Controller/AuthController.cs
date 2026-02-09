@@ -14,7 +14,6 @@ namespace SmartRoom.API.Controller
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize]
     public class AuthController : ControllerBase
     {
         private readonly AppDbContext _context;
