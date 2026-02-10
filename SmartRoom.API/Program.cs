@@ -34,6 +34,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 // Authorize button in swagger
 builder.Services.AddSwaggerGen(c =>
 {
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = System.IO.Path.Combine(AppContext.BaseDirectory, xmlFile);
+    c.IncludeXmlComments(xmlPath);
+
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "input JWT token like: Bearer {your_token}",
