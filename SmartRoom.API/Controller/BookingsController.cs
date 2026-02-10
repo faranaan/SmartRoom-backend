@@ -8,6 +8,9 @@ using System.Security.Claims;
 
 namespace SmartRoom.API.Controller
 {
+    /// <summary>
+    /// Controller for managing bookings in the SmartRoom system. 
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -20,6 +23,11 @@ namespace SmartRoom.API.Controller
             _context = context;
         }
 
+        /// <summary>
+        /// Retrieve all bookings in the system.
+        /// </summary>
+        /// <remarks> Only accessible by Admin users. </remarks>
+        /// <returns>List of all bookings in the system</returns>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Booking>>> GetBookings()
         {
@@ -30,6 +38,10 @@ namespace SmartRoom.API.Controller
                 .ToListAsync();
         }
 
+        /// <summary>
+        /// Retrieve bookings made by the authenticated user.
+        /// </summary>
+        /// <returns>List of bookings made by the authenticated user</returns>
         [HttpGet("my-bookings")]
         public async Task<ActionResult<IEnumerable<Booking>>> GetMyBookings()
         {
@@ -38,7 +50,18 @@ namespace SmartRoom.API.Controller
             return await _context.Bookings.Where(b => b.UserId == userId).Include(b => b.Room).OrderByDescending(b => b.StartTime).ToListAsync();
         }
 
+        /// <summary>
+        /// Create a new booking in the system.
+        /// </summary>
+        /// <remarks> Booking times are stored in UTC format, EndTime must be after startTime, system checks for conflicts. </remarks>
+        /// <param name="request">Data of the booking to be created</param>
+        /// <response code="201">Booking created successfully</response>
+        /// <response code="400">Invalid input data or room is already booked for the selected time range</response>
+        /// <response code="401">Unauthorized user</response>
         [HttpPost]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult<Booking>> CreateBooking(CreateBookingDto request)
         {
             // convert time to UTC
@@ -86,8 +109,16 @@ namespace SmartRoom.API.Controller
             return CreatedAtAction(nameof(GetBookings), new { id = booking.Id }, booking);
         }
 
-
+        /// <summary>
+        /// Update the status of a booking.
+        /// </summary>
+        /// <param name="id">Id of the booking to update.</param>
+        /// <param name="request">new status of the booking (approved, rejected, pending, cancelled)</param>
+        /// <response code="200">Booking status updated successfully</response>
+        /// <response code="404">Booking not found</response>
         [HttpPut("{id}/status")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> UpdateBookingStatus(int id, BookingStatusDto request)
         {
             var booking = await _context.Bookings.FindAsync(id);

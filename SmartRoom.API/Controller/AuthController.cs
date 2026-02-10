@@ -12,6 +12,9 @@ using Microsoft.AspNetCore.Identity;
 
 namespace SmartRoom.API.Controller
 {
+    /// <summary>
+    /// Authentication service for handling user registration and login using JWT.
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
@@ -26,7 +29,14 @@ namespace SmartRoom.API.Controller
             _configuration = configuration;
         }
 
-        // POST: api/Auth/register
+        /// <summary>
+        /// Register a new user into the system.
+        /// </summary>
+        /// <param name="request">
+        /// Registration data containing Username, Password, and Role.
+        /// </param>
+        /// <response code="200">User registered successfully.</response>
+        /// <response code="400">Username already exists or invalid input.</response>
         [HttpPost("register")]
         public async Task<ActionResult<User>> Register(RegisterDto request)
         {
@@ -50,7 +60,24 @@ namespace SmartRoom.API.Controller
             return Ok("User registered successfully.");
         }
 
-        // POST: api/Auth/login
+        /// <summary>
+        /// Verify user credentials and generates a JWT access token.
+        /// </summary>
+        /// <remarks>
+        /// The generated token contains the following claims:
+        /// - NameIdentifier (User ID)
+        /// - Name (Username)
+        /// - Role (User Role)
+        /// This token must be included in the request header:
+        /// Authorization: Beaerer [token]
+        /// to access protected endpoints.
+        /// </remarks>
+        /// <param name="request">
+        /// Login data containing Username and Password.
+        /// </param>
+        /// <returns>JWT Token as a string</returns>
+        /// <response code="200">Login successful and token returned.</response>
+        /// <response code="401">Invalid credentials or user not found.</response>
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(LoginDto request)
         {
@@ -66,7 +93,9 @@ namespace SmartRoom.API.Controller
             return Ok(new { token });
         }
 
-        // create JWT Token
+        /// <summary>
+        /// Internal method to generate a JWT token.
+        /// </summary>
         private string CreateToken(User user)
         {
             List<Claim> claims = new List<Claim>
