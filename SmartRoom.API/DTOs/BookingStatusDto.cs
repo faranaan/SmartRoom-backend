@@ -14,5 +14,10 @@ namespace SmartRoom.API.DTOs
         /// <remarks> Possible values: Pending, Approved, Rejected </remarks>
         [Required]
         public BookingStatus Status { get; set; }
+
+        /// <summary>
+        /// Optional notes for rejection reason or cancellation remarks.
+        /// </summary>
+        public string? Notes { get; set; }
     }
 }

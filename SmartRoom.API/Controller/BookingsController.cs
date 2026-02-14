@@ -114,12 +114,11 @@ namespace SmartRoom.API.Controller
         /// </summary>
         /// <param name="id">Id of the booking to update.</param>
         /// <param name="request">new status of the booking (approved, rejected, pending, cancelled)</param>
-        /// <response code="200">Booking status updated successfully</response>
-        /// <response code="404">Booking not found</response>
         [HttpPut("{id}/status")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> UpdateBookingStatus(int id, BookingStatusDto request)
+        public async Task<IActionResult> UpdateBookingStatus(int id, [FromBody] BookingStatusDto request)
         {
             var booking = await _context.Bookings.FindAsync(id);
 
@@ -128,11 +127,26 @@ namespace SmartRoom.API.Controller
                 return NotFound("Booking not found.");
             }
 
-            booking.Status = request.Status;
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+            var userId = int.Parse(userIdStr);
+
+            if (request.Status == BookingStatus.Approved || request.Status == BookingStatus.Rejected)
+            {
+                if (userRole != "Admin") return Forbid();
+            } else if (request.Status == BookingStatus.Cancelled)
+            {
+                if (userRole != "Admin" && booking.UserId != userId) return Forbid();
+            }
+
+            var oldStatus = booking.Status;
+            booking.Status =request.Status;
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = $"Booking status updated to {request.Status}", data = booking });
+            return Ok(new { message = $"Booking status updated from {oldStatus} to {booking.Status}", data = booking, note = request.Notes });
         }
     }
 }
