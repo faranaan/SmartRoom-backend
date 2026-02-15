@@ -223,5 +223,30 @@ namespace SmartRoom.API.Controller
 
             return Ok(new { message = $"Booking status updated", status = booking.Status });
         }
+
+        /// <summary>
+        /// Deletes a specific booking record permanently.
+        /// </summary>
+        /// <param name="id">The unique identifier of the booking to be deleted.</param>
+        /// <response code="204">Booking successfully deleted.</response>
+        /// <response code="404">Booking with the specified ID was not found.</response>
+        /// <response code="401">Unauthorized. Admin role is required.</response>
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DeleteBooking(int id)
+        {
+            var booking = await _context.Bookings.FindAsync(id);
+            if (booking == null)
+            {
+                return NotFound("Booking not found.");
+            }
+
+            _context.Bookings.Remove(booking);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
     }
 }
