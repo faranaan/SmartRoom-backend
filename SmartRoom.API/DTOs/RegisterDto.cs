@@ -30,5 +30,15 @@ namespace SmartRoom.API.DTOs
         /// <remarks> Default role is Mahasiswa.</remarks>
         /// <example>Mahasiswa</example>
         public UserRole Role { get; set; } = UserRole.Mahasiswa;
+
+        /// <summary>
+        /// Secret key required for Administrator registration
+        /// </summary>
+        /// <remarks>
+        /// This field is only validated if the Role is set to 'Admin
+        /// it is not stored in the database.
+        /// </remarks>
+        /// <example>SmartRoom2026</example>
+        public string? AdminSecretKey { get; set; }
     }
 }

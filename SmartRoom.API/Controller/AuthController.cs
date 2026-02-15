@@ -45,6 +45,16 @@ namespace SmartRoom.API.Controller
                 return BadRequest("Username already exists.");
             }
 
+            if(request.Role == UserRole.Admin)
+            {
+                var serverSecret = _configuration.GetSection("AppSettings:AdminSecretKey").Value;
+
+                if (string.IsNullOrEmpty(request.AdminSecretKey) || request.AdminSecretKey != serverSecret)
+                {
+                    return BadRequest("Invalid Admin Secret Key! You are not authorized to register as an Admin");
+                }
+            }
+
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
 
             var user = new User

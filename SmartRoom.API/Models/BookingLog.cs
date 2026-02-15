@@ -4,7 +4,8 @@ namespace SmartRoom.API.Models
     {
         Created,
         Approved,
-        Rejected
+        Rejected,
+        Cancelled
     }
 
     public class BookingLog

@@ -45,9 +45,54 @@ namespace SmartRoom.API.Controller
         [HttpGet("my-bookings")]
         public async Task<ActionResult<IEnumerable<Booking>>> GetMyBookings()
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("id")?.Value;
+
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+            var userId = int.Parse(userIdStr);
 
             return await _context.Bookings.Where(b => b.UserId == userId).Include(b => b.Room).OrderByDescending(b => b.StartTime).ToListAsync();
+        }
+
+        /// <summary>
+        /// Retrieves a list of bookings for a specific room to be displayed in the room detail schedule.
+        /// </summary>
+        /// <param name="roomId">The unique identifier of the room.</param>
+        /// <returns>A list of objects containing booking time, status, and the borrower's username.</returns>
+        [HttpGet("room/{roomId}")]
+        public async Task<ActionResult<IEnumerable<object>>> GetBookingsByRoom(int roomId)
+        {
+            var bookings = await _context.Bookings.Include(b => b.User).Where(b => b.RoomId == roomId).OrderByDescending(b => b.StartTime).Select(b => new
+            {
+                b.Id,
+                b.StartTime,
+                b.EndTime,
+                b.Status,
+                Username = b.User != null ? b.User.Username : "Unknown User",
+                Purpose = b.Description
+            }).ToListAsync();
+
+            return Ok(bookings);
+        }
+
+        /// <summary>
+        /// Retrieves the audit trail logs for a specific room, showing all actions (Create, Approve, Reject, Cancel).
+        /// </summary>
+        /// <param name="roomId">The unique identifier of the room.</param>
+        /// <returns>A list of log entries detailing actions performed, the actor, and associated booking info.</returns>
+        [HttpGet("room/{roomId}/logs")]
+        public async Task<ActionResult<IEnumerable<object>>> GetRoomLogs(int roomId)
+        {
+            var logs = await _context.BookingLogs.Include(l => l.Booking).ThenInclude(b => b.User).Where(l => l.Booking.RoomId == roomId).OrderByDescending(l => l.TimeStamp).Select(l => new
+            {
+                l.Id,
+                l.Action,
+                l.PerformedBy,
+                l.TimeStamp,
+                l.Notes,
+                Peminjam = (l.Booking != null && l.Booking.User != null) ? l.Booking.User.Username : "System"
+            }).ToListAsync();
+
+            return Ok(logs);
         }
 
         /// <summary>
@@ -74,29 +119,27 @@ namespace SmartRoom.API.Controller
                 return BadRequest("End date must be after start date.");
             }
 
+            if(startTimeUtc < DateTime.UtcNow) return BadRequest("Cannot booking in the past.");
+
             // availability validation
-            bool isConflict = await _context.Bookings.AnyAsync(b => b.RoomId == request.RoomId && b.Status != BookingStatus.Rejected && (startTimeUtc < b.EndTime && endTImeUtc > b.StartTime));
+            bool isConflict = await _context.Bookings.AnyAsync(b => b.RoomId == request.RoomId && b.Status != BookingStatus.Rejected && b.Status != BookingStatus.Cancelled && (startTimeUtc < b.EndTime && endTImeUtc > b.StartTime));
 
             if (isConflict)
             {
                 return BadRequest("The room is already booked for the selected time range.");
             }
 
-            // get user id from token
-            var userIdClaim = User.FindFirst("id");
-            var username = User.Identity?.Name;
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("id")?.Value;
+            if(string.IsNullOrEmpty(userIdStr)) return Unauthorized();
 
-            if (user == null)
-            {
-                return Unauthorized("User nof found.");
-            }
+            var userId = int.Parse(userIdStr);
+            var username = User.Identity?.Name ?? "Unknown User";
 
             // save booking
             var booking = new Booking
             {
                 RoomId = request.RoomId,
-                UserId = user.Id,
+                UserId = userId,
                 StartTime = startTimeUtc,
                 EndTime = endTImeUtc,
                 Description = request.Description,
@@ -104,9 +147,22 @@ namespace SmartRoom.API.Controller
             };
 
             _context.Bookings.Add(booking);
+
+            var log = new BookingLog
+            {
+                Booking= booking,
+                Action = ActionType.Created,
+                PerformedBy = username,
+                TimeStamp = DateTime.UtcNow,
+                Notes = "Booking created at the first time"
+            };
+            _context.BookingLogs.Add(log);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetBookings), new { id = booking.Id }, booking);
+            return CreatedAtAction(nameof(GetBookings), new { id = booking.Id }, new
+            {
+                booking.Id, booking.Status, Message = "Booking created successfully"
+            });
         }
 
         /// <summary>
@@ -127,8 +183,9 @@ namespace SmartRoom.API.Controller
                 return NotFound("Booking not found.");
             }
 
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("id")?.Value;
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var username = User.Identity?.Name ?? "Unknown";
 
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
             var userId = int.Parse(userIdStr);
@@ -144,9 +201,27 @@ namespace SmartRoom.API.Controller
             var oldStatus = booking.Status;
             booking.Status =request.Status;
 
+            var logAction = request.Status switch
+            {
+                BookingStatus.Approved => ActionType.Approved,
+                BookingStatus.Rejected => ActionType.Rejected,
+                BookingStatus.Cancelled => ActionType.Cancelled,
+                _ => ActionType.Created
+            };
+
+            var log = new BookingLog
+            {
+                BookingId = booking.Id,
+                Action = logAction,
+                PerformedBy = username,
+                TimeStamp = DateTime.UtcNow,
+                Notes = request.Notes ?? $"Status changed from {oldStatus} to {booking.Status}"
+            };
+            _context.BookingLogs.Add(log);
+
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = $"Booking status updated from {oldStatus} to {booking.Status}", data = booking, note = request.Notes });
+            return Ok(new { message = $"Booking status updated", status = booking.Status });
         }
     }
 }
