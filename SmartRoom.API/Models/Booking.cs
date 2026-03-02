@@ -15,6 +15,9 @@ namespace SmartRoom.API.Models
     {
         public int Id { get; set; }
 
+        public int CampusId { get; set; }
+        public Campus? Campus { get; set; }
+
         [Required]
         public int UserId { get; set; }
         public User? User { get; set; }

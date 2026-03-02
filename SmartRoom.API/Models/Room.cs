@@ -22,5 +22,8 @@ namespace SmartRoom.API.Models
         public RoomType Type { get; set; } = RoomType.Classroom;
         public BuildingType Building { get; set; } = BuildingType.TowerA;
         public bool IsAvailable { get; set; } = true;  
+        public int CampusId { get; set; } 
+        public Campus? Campus { get; set; }
+        public ICollection<Booking>? Bookings { get; set; }
     }
 }

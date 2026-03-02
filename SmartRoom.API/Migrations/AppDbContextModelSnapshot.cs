@@ -30,6 +30,9 @@ namespace SmartRoom.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CampusId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text");
@@ -51,6 +54,8 @@ namespace SmartRoom.API.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CampusId");
 
                     b.HasIndex("RoomId");
 
@@ -91,6 +96,40 @@ namespace SmartRoom.API.Migrations
                     b.ToTable("BookingLogs");
                 });
 
+            modelBuilder.Entity("SmartRoom.API.Models.Campus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdminRegistrationToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StudentRegistrationToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Campuses");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            AdminRegistrationToken = "ADM-123",
+                            Name = "Kampys Utama",
+                            StudentRegistrationToken = "MHS-123"
+                        });
+                });
+
             modelBuilder.Entity("SmartRoom.API.Models.Room", b =>
                 {
                     b.Property<int>("Id")
@@ -102,6 +141,9 @@ namespace SmartRoom.API.Migrations
                     b.Property<string>("Building")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("CampusId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Capacity")
                         .HasColumnType("integer");
@@ -119,6 +161,8 @@ namespace SmartRoom.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CampusId");
+
                     b.ToTable("Rooms");
 
                     b.HasData(
@@ -126,6 +170,7 @@ namespace SmartRoom.API.Migrations
                         {
                             Id = 1,
                             Building = "TowerA",
+                            CampusId = 1,
                             Capacity = 30,
                             IsAvailable = true,
                             RoomName = "Classroom 101",
@@ -135,6 +180,7 @@ namespace SmartRoom.API.Migrations
                         {
                             Id = 2,
                             Building = "TowerB",
+                            CampusId = 1,
                             Capacity = 20,
                             IsAvailable = true,
                             RoomName = "Laboratory 202",
@@ -144,6 +190,7 @@ namespace SmartRoom.API.Migrations
                         {
                             Id = 3,
                             Building = "TowerC",
+                            CampusId = 1,
                             Capacity = 15,
                             IsAvailable = true,
                             RoomName = "Meeting Room 303",
@@ -153,6 +200,7 @@ namespace SmartRoom.API.Migrations
                         {
                             Id = 4,
                             Building = "TowerA",
+                            CampusId = 1,
                             Capacity = 100,
                             IsAvailable = true,
                             RoomName = "Auditorium 404",
@@ -168,6 +216,12 @@ namespace SmartRoom.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("CampusId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("text");
+
                     b.Property<string>("Password")
                         .IsRequired()
                         .HasColumnType("text");
@@ -182,22 +236,32 @@ namespace SmartRoom.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CampusId");
+
                     b.ToTable("Users");
                 });
 
             modelBuilder.Entity("SmartRoom.API.Models.Booking", b =>
                 {
+                    b.HasOne("SmartRoom.API.Models.Campus", "Campus")
+                        .WithMany("Bookings")
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("SmartRoom.API.Models.Room", "Room")
-                        .WithMany()
+                        .WithMany("Bookings")
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("SmartRoom.API.Models.User", "User")
-                        .WithMany()
+                        .WithMany("Bookings")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Campus");
 
                     b.Navigation("Room");
 
@@ -215,9 +279,49 @@ namespace SmartRoom.API.Migrations
                     b.Navigation("Booking");
                 });
 
+            modelBuilder.Entity("SmartRoom.API.Models.Room", b =>
+                {
+                    b.HasOne("SmartRoom.API.Models.Campus", "Campus")
+                        .WithMany("Rooms")
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Campus");
+                });
+
+            modelBuilder.Entity("SmartRoom.API.Models.User", b =>
+                {
+                    b.HasOne("SmartRoom.API.Models.Campus", "Campus")
+                        .WithMany("Users")
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Campus");
+                });
+
             modelBuilder.Entity("SmartRoom.API.Models.Booking", b =>
                 {
                     b.Navigation("Logs");
+                });
+
+            modelBuilder.Entity("SmartRoom.API.Models.Campus", b =>
+                {
+                    b.Navigation("Bookings");
+
+                    b.Navigation("Rooms");
+
+                    b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("SmartRoom.API.Models.Room", b =>
+                {
+                    b.Navigation("Bookings");
+                });
+
+            modelBuilder.Entity("SmartRoom.API.Models.User", b =>
+                {
+                    b.Navigation("Bookings");
                 });
 #pragma warning restore 612, 618
         }
