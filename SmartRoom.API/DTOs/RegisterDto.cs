@@ -40,5 +40,15 @@ namespace SmartRoom.API.DTOs
         /// </remarks>
         /// <example>SmartRoom2026</example>
         public string? AdminSecretKey { get; set; }
+
+        /// <summary>
+        /// Token required to identify the Campus and authorize registration.
+        /// </summary>
+        /// <remarks>
+        /// This token is mandatory except for SuperAdmin. 
+        /// It determines which Campus the user will be bound to.
+        /// </remarks>
+        /// <example>CAMPUS-TOKEN-123</example>
+        public string? RegistrationToken { get; set; }
     }
 }

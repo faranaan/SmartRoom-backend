@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using SmartRoom.API.Data;
 using SmartRoom.API.Models;
+using System.Security.Claims;
 
 namespace SmartRoom.API.Controller
 {
@@ -29,7 +30,33 @@ namespace SmartRoom.API.Controller
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Room>>> GetRooms()
         {
-            return await _context.Rooms.ToListAsync();
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+
+            IQueryable<Room> query = _context.Rooms
+                .Include(r => r.Building)
+                .Include(r => r.RoomType);
+
+            if (userRole != UserRole.SuperAdmin.ToString())
+            {
+                if (string.IsNullOrEmpty(campusIdStr))
+                {
+                    return Unauthorized("Campus ID is missing in your token.");
+                }
+
+                if (int.TryParse(campusIdStr, out int campusId))
+                {
+                    query = query.Where(r => r.CampusId == campusId);
+                }
+                else
+                {
+                    return BadRequest("Invalid Campus ID format in token.");
+                }
+            }
+            var rooms = await query.ToListAsync();
+
+            return Ok(rooms);
+            
         }
 
         /// <summary>
@@ -44,14 +71,22 @@ namespace SmartRoom.API.Controller
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<Room>> GetRoom(int id)
         {
-            var room = await _context.Rooms.FindAsync(id);
+            var room = await _context.Rooms
+                .Include(r => r.Building)
+                .Include(r => r.RoomType)
+                .FirstOrDefaultAsync(r => r.Id == id);
 
-            if (room == null)
+            if (room == null) return NotFound("Room not found.");
+
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+
+            if (userRole != UserRole.SuperAdmin.ToString())
             {
-                return NotFound("Room not found.");
+                if (room.CampusId.ToString() != campusIdStr) return Forbid("You are not authorized to view this room.");
             }
 
-            return room;
+            return Ok(room);
         }
 
         /// <summary>
@@ -66,10 +101,15 @@ namespace SmartRoom.API.Controller
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<Room>> PostRoom(Room room)
         {
-            if (string.IsNullOrWhiteSpace(room.RoomName))
-            {
-                return BadRequest("Room name cannot be empty.");
-            }
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+            if (string.IsNullOrEmpty(campusIdStr)) return Unauthorized("Admin must belong to a campus.");
+            if (string.IsNullOrWhiteSpace(room.RoomName)) return BadRequest("Room name cannot be empty.");
+            if (!int.TryParse(campusIdStr, out int campusId)) return BadRequest("Invalid Campus ID in token.");
+
+            room.CampusId = campusId;
+            room.Building = null;
+            room.RoomType = null;
+            room.Campus = null;
 
             _context.Rooms.Add(room);
             await _context.SaveChangesAsync();
@@ -91,10 +131,27 @@ namespace SmartRoom.API.Controller
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> PutRoom(int id, Room room)
         {
-            if (id != room.Id)
+            if (id != room.Id) return BadRequest("Room ID mismatch");
+
+            var existingRoom = await _context.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id);
+            if (existingRoom == null) return NotFound("Room not found.");
+
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+
+            if (userRole != UserRole.SuperAdmin.ToString())
             {
-                return BadRequest("Room ID mismatch");
+                if (existingRoom.CampusId.ToString() != campusIdStr)
+                {
+                    return Forbid("You cannot update a room from another campus.");
+                }
+
+                room.CampusId = existingRoom.CampusId;
             }
+            
+            room.Building = null;
+            room.RoomType = null;
+            room.Campus = null;
 
             _context.Entry(room).State = EntityState.Modified;
 
@@ -129,9 +186,17 @@ namespace SmartRoom.API.Controller
         public async Task<IActionResult> DeleteRoom(int id)
         {
             var room = await _context.Rooms.FindAsync(id);
-            if (room == null)
+            if (room == null) return NotFound("Room not found.");
+
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+
+            if (userRole != UserRole.SuperAdmin.ToString())
             {
-                return NotFound("Room not found.");
+                if (room.CampusId.ToString() != campusIdStr)
+                {
+                    return Forbid("You cannot delete a room from another campus.");
+                }
             }
 
             _context.Rooms.Remove(room);

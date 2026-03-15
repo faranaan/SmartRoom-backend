@@ -29,13 +29,22 @@ namespace SmartRoom.API.Controller
         /// <remarks> Only accessible by Admin users. </remarks>
         /// <returns>List of all bookings in the system</returns>
         [HttpGet]
+        [Authorize(Roles = "SuperAdmin,Admin")]
         public async Task<ActionResult<IEnumerable<Booking>>> GetBookings()
         {
-            return await _context.Bookings
-                .Include(b => b.Room)
-                .Include(b=> b.User)
-                .OrderByDescending(b => b.StartTime)
-                .ToListAsync();
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+
+            IQueryable<Booking> query = _context.Bookings.Include(b => b.Room).Include(b => b.User);
+
+            if (userRole != UserRole.SuperAdmin.ToString())
+            {
+                if (string.IsNullOrEmpty(campusIdStr)) return Unauthorized("Campus ID is missing in token.");
+                int campusId = int.Parse(campusIdStr);
+                query = query.Where(b => b.Room.CampusId == campusId);
+            }
+
+            return await query.OrderByDescending(b => b.StartTime).ToListAsync();
         }
 
         /// <summary>
@@ -109,11 +118,9 @@ namespace SmartRoom.API.Controller
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult<Booking>> CreateBooking(CreateBookingDto request)
         {
-            // convert time to UTC
             var startTimeUtc = request.StartTime.ToUniversalTime();
             var endTImeUtc = request.EndTime.ToUniversalTime();
 
-            // date validation
             if (startTimeUtc >= endTImeUtc)
             {
                 return BadRequest("End date must be after start date.");
@@ -121,7 +128,14 @@ namespace SmartRoom.API.Controller
 
             if(startTimeUtc < DateTime.UtcNow) return BadRequest("Cannot booking in the past.");
 
-            // availability validation
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+            if (string.IsNullOrEmpty(campusIdStr)) return Unauthorized("User must belong to a campus to book a room.");
+            int userCampusId = int.Parse(campusIdStr);
+
+            var targetRoom = await _context.Rooms.FindAsync(request.RoomId);
+            if (targetRoom == null) return NotFound("Room not found.");
+            if (targetRoom.CampusId != userCampusId) return Forbid("you cannot book a room in another campus.");
+
             bool isConflict = await _context.Bookings.AnyAsync(b => b.RoomId == request.RoomId && b.Status != BookingStatus.Rejected && b.Status != BookingStatus.Cancelled && (startTimeUtc < b.EndTime && endTImeUtc > b.StartTime));
 
             if (isConflict)
@@ -138,6 +152,7 @@ namespace SmartRoom.API.Controller
             // save booking
             var booking = new Booking
             {
+                CampusId = userCampusId,
                 RoomId = request.RoomId,
                 UserId = userId,
                 StartTime = startTimeUtc,
@@ -176,7 +191,7 @@ namespace SmartRoom.API.Controller
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> UpdateBookingStatus(int id, [FromBody] BookingStatusDto request)
         {
-            var booking = await _context.Bookings.FindAsync(id);
+            var booking = await _context.Bookings.Include(b => b.Room).FirstOrDefaultAsync(b => b.Id == id);
 
             if (booking == null)
             {
@@ -185,17 +200,37 @@ namespace SmartRoom.API.Controller
 
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("id")?.Value;
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
             var username = User.Identity?.Name ?? "Unknown";
+
+            if (userRole != UserRole.SuperAdmin.ToString())
+            {
+                if (booking.Room.CampusId.ToString() != campusIdStr) return Forbid("You are not authorized to manage bookings from another campus.");
+            }
 
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
             var userId = int.Parse(userIdStr);
 
             if (request.Status == BookingStatus.Approved || request.Status == BookingStatus.Rejected)
             {
-                if (userRole != "Admin") return Forbid();
+                if (userRole != UserRole.Admin.ToString() && userRole != UserRole.SuperAdmin.ToString()) return Forbid();
             } else if (request.Status == BookingStatus.Cancelled)
             {
-                if (userRole != "Admin" && booking.UserId != userId) return Forbid();
+                if (userRole != UserRole.Admin.ToString() && userRole != UserRole.SuperAdmin.ToString() && booking.UserId != userId) return Forbid();
+            }
+
+            if (request.Status == BookingStatus.Approved)
+            {
+                bool hasExistingApproval = await _context.Bookings.AnyAsync(b => 
+                    b.RoomId == booking.RoomId && 
+                    b.Id != booking.Id && 
+                    b.Status == BookingStatus.Approved && 
+                    (booking.StartTime < b.EndTime && booking.EndTime > b.StartTime));
+
+                if (hasExistingApproval)
+                {
+                    return BadRequest("Cannot approve. There is already another approved booking for this room at the same time.");
+                }
             }
 
             var oldStatus = booking.Status;
@@ -232,15 +267,23 @@ namespace SmartRoom.API.Controller
         /// <response code="404">Booking with the specified ID was not found.</response>
         /// <response code="401">Unauthorized. Admin role is required.</response>
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "SuperAdmin,Admin")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeleteBooking(int id)
         {
-            var booking = await _context.Bookings.FindAsync(id);
+            var booking = await _context.Bookings.Include(b => b.Room).FirstOrDefaultAsync(b => b.Id == id);
             if (booking == null)
             {
                 return NotFound("Booking not found.");
+            }
+
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+
+            if (userRole != UserRole.SuperAdmin.ToString())
+            {
+                if (booking.Room.CampusId.ToString() != campusIdStr) return Forbid("You cannot delete a booking from another campus.");
             }
 
             _context.Bookings.Remove(booking);

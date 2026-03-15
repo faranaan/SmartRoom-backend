@@ -45,14 +45,40 @@ namespace SmartRoom.API.Controller
                 return BadRequest("Username already exists.");
             }
 
-            if(request.Role == UserRole.Admin)
+            if (request.Role == UserRole.SuperAdmin)
             {
-                var serverSecret = _configuration.GetSection("AppSettings:AdminSecretKey").Value;
+                return BadRequest("SuperAdmin registration is not allowed via API.");
+            }
 
-                if (string.IsNullOrEmpty(request.AdminSecretKey) || request.AdminSecretKey != serverSecret)
+            int? assignedCampusId = null;
+
+            if (request.Role != UserRole.SuperAdmin)
+            {
+                if (string.IsNullOrEmpty(request.RegistrationToken))
                 {
-                    return BadRequest("Invalid Admin Secret Key! You are not authorized to register as an Admin");
+                    return BadRequest("Registration token is required for this role.");
                 }
+
+                Campus? campus = null;
+
+                if (request.Role == UserRole.Admin)
+                {
+                    campus = await _context.Campuses.FirstOrDefaultAsync(c => c.AdminRegistrationToken == request.RegistrationToken);
+                    if (campus == null) 
+                    {
+                        return BadRequest("Invalid Admin Registration Token. Make sure you are using the token provided for Campus Admin.");
+                    }
+                }
+                else if (request.Role == UserRole.Mahasiswa || request.Role == UserRole.Dosen)
+                {
+                    campus = await _context.Campuses.FirstOrDefaultAsync(c => c.MemberRegistrationToken == request.RegistrationToken);
+                    if (campus == null) 
+                    {
+                        return BadRequest("Invalid Registration Token for Student/Lecturer.");
+                    }
+                }
+
+                assignedCampusId = campus?.Id;
             }
 
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
@@ -61,7 +87,9 @@ namespace SmartRoom.API.Controller
             {
                 Username = request.Username,
                 Password = passwordHash,
-                Role = request.Role
+                Role = request.Role,
+                CampusId = assignedCampusId,
+                Email = null
             };
 
             _context.Users.Add(user);
@@ -114,6 +142,11 @@ namespace SmartRoom.API.Controller
                 new Claim(ClaimTypes.Name, user.Username),
                 new Claim(ClaimTypes.Role, user.Role.ToString())
             };
+
+            if (user.CampusId.HasValue)
+            {
+                claims.Add(new Claim("CampusId", user.CampusId.Value.ToString()));
+            }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("Jwt:Key").Value!));
 

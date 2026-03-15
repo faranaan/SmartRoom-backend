@@ -23,16 +23,33 @@ namespace SmartRoom.API.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<ActionResult<AdminDashboardDto>> GetAdminStats()
         {
+            var campusIdStr = User.FindFirst("CampusId")?.Value;
+            
+            if (string.IsNullOrEmpty(campusIdStr)) 
+            {
+                return BadRequest("Campus ID not found in token.");
+            }
+
+            int campusId = int.Parse(campusIdStr);
             var today = DateTime.UtcNow.Date;
 
             var stats = new AdminDashboardDto
             {
-                TotalUsers = await _context.Users.CountAsync(),
-                TotalRooms = await _context.Rooms.CountAsync(),
-                PendingBookings = await _context.Bookings.CountAsync(b => b.Status == Models.BookingStatus.Pending),
-                ActiveBookingsToday = await _context.Bookings.CountAsync(b => 
-                    b.Status == Models.BookingStatus.Approved && 
-                    b.StartTime.Date == today)
+                TotalUsers = await _context.Users
+                    .CountAsync(u => u.CampusId == campusId),
+
+                TotalRooms = await _context.Rooms
+                    .CountAsync(r => r.CampusId == campusId),
+
+                PendingBookings = await _context.Bookings
+                    .CountAsync(b => b.Room.CampusId == campusId && 
+                                    b.Status == Models.BookingStatus.Pending),
+
+                ActiveBookingsToday = await _context.Bookings
+                    .CountAsync(b => 
+                        b.Room.CampusId == campusId && 
+                        b.Status == Models.BookingStatus.Approved && 
+                        b.StartTime.Date == today)
             };
 
             return Ok(stats);

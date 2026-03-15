@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace SmartRoom.API.Migrations
 {
     /// <inheritdoc />
-    public partial class MultiTenantFoundation : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -22,7 +22,7 @@ namespace SmartRoom.API.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     Name = table.Column<string>(type: "text", nullable: false),
                     AdminRegistrationToken = table.Column<string>(type: "text", nullable: false),
-                    StudentRegistrationToken = table.Column<string>(type: "text", nullable: false)
+                    MemberRegistrationToken = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -30,23 +30,39 @@ namespace SmartRoom.API.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Rooms",
+                name: "Buildings",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    RoomName = table.Column<string>(type: "text", nullable: false),
-                    Capacity = table.Column<int>(type: "integer", nullable: false),
-                    Type = table.Column<string>(type: "text", nullable: false),
-                    Building = table.Column<string>(type: "text", nullable: false),
-                    IsAvailable = table.Column<bool>(type: "boolean", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
                     CampusId = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Rooms", x => x.Id);
+                    table.PrimaryKey("PK_Buildings", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Rooms_Campuses_CampusId",
+                        name: "FK_Buildings_Campuses_CampusId",
+                        column: x => x.CampusId,
+                        principalTable: "Campuses",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RoomTypes",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    CampusId = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RoomTypes", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RoomTypes_Campuses_CampusId",
                         column: x => x.CampusId,
                         principalTable: "Campuses",
                         principalColumn: "Id",
@@ -72,6 +88,42 @@ namespace SmartRoom.API.Migrations
                         name: "FK_Users_Campuses_CampusId",
                         column: x => x.CampusId,
                         principalTable: "Campuses",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Rooms",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    RoomName = table.Column<string>(type: "text", nullable: false),
+                    Capacity = table.Column<int>(type: "integer", nullable: false),
+                    RoomTypeId = table.Column<int>(type: "integer", nullable: false),
+                    BuildingId = table.Column<int>(type: "integer", nullable: false),
+                    IsAvailable = table.Column<bool>(type: "boolean", nullable: false),
+                    CampusId = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Rooms", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Rooms_Buildings_BuildingId",
+                        column: x => x.BuildingId,
+                        principalTable: "Buildings",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Rooms_Campuses_CampusId",
+                        column: x => x.CampusId,
+                        principalTable: "Campuses",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Rooms_RoomTypes_RoomTypeId",
+                        column: x => x.RoomTypeId,
+                        principalTable: "RoomTypes",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -138,18 +190,45 @@ namespace SmartRoom.API.Migrations
 
             migrationBuilder.InsertData(
                 table: "Campuses",
-                columns: new[] { "Id", "AdminRegistrationToken", "Name", "StudentRegistrationToken" },
-                values: new object[] { 1, "ADM-123", "Kampys Utama", "MHS-123" });
+                columns: new[] { "Id", "AdminRegistrationToken", "MemberRegistrationToken", "Name" },
+                values: new object[] { 1, "ADM-123", "MBR-123", "Politeknik Elektronika Negeri Surabaya" });
+
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "Id", "CampusId", "Email", "Password", "Role", "Username" },
+                values: new object[] { 1, null, "superadmin@smartroom.com", "$2a$11$1ubzc9BlhI5pH8zGtblP7eBzZgDG4lTRXHr5n4FMTvjkfOulNJSFu", "SuperAdmin", "superadmin" });
+
+            migrationBuilder.InsertData(
+                table: "Buildings",
+                columns: new[] { "Id", "CampusId", "Name" },
+                values: new object[,]
+                {
+                    { 1, 1, "Gedung D4" },
+                    { 2, 1, "Gedung D3" },
+                    { 3, 1, "SAW" },
+                    { 4, 1, "Pascasarjana" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "RoomTypes",
+                columns: new[] { "Id", "CampusId", "Name" },
+                values: new object[,]
+                {
+                    { 1, 1, "Classroom" },
+                    { 2, 1, "Laboratory" },
+                    { 3, 1, "Meeting Room" },
+                    { 4, 1, "Auditorium" }
+                });
 
             migrationBuilder.InsertData(
                 table: "Rooms",
-                columns: new[] { "Id", "Building", "CampusId", "Capacity", "IsAvailable", "RoomName", "Type" },
+                columns: new[] { "Id", "BuildingId", "CampusId", "Capacity", "IsAvailable", "RoomName", "RoomTypeId" },
                 values: new object[,]
                 {
-                    { 1, "TowerA", 1, 30, true, "Classroom 101", "Classroom" },
-                    { 2, "TowerB", 1, 20, true, "Laboratory 202", "Laboratory" },
-                    { 3, "TowerC", 1, 15, true, "Meeting Room 303", "MeetingRoom" },
-                    { 4, "TowerA", 1, 100, true, "Auditorium 404", "Auditorium" }
+                    { 1, 1, 1, 60, true, "C303", 2 },
+                    { 2, 2, 1, 30, true, "HH106", 1 },
+                    { 3, 3, 1, 120, true, "SAW 0708", 3 },
+                    { 4, 4, 1, 300, true, "Auditorium 501", 4 }
                 });
 
             migrationBuilder.CreateIndex(
@@ -173,8 +252,28 @@ namespace SmartRoom.API.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Buildings_CampusId",
+                table: "Buildings",
+                column: "CampusId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Rooms_BuildingId",
+                table: "Rooms",
+                column: "BuildingId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Rooms_CampusId",
                 table: "Rooms",
+                column: "CampusId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Rooms_RoomTypeId",
+                table: "Rooms",
+                column: "RoomTypeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RoomTypes_CampusId",
+                table: "RoomTypes",
                 column: "CampusId");
 
             migrationBuilder.CreateIndex(
@@ -197,6 +296,12 @@ namespace SmartRoom.API.Migrations
 
             migrationBuilder.DropTable(
                 name: "Users");
+
+            migrationBuilder.DropTable(
+                name: "Buildings");
+
+            migrationBuilder.DropTable(
+                name: "RoomTypes");
 
             migrationBuilder.DropTable(
                 name: "Campuses");
