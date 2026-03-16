@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace SmartRoom.API.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class InitialPostgres : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -196,7 +196,7 @@ namespace SmartRoom.API.Migrations
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "Id", "CampusId", "Email", "Password", "Role", "Username" },
-                values: new object[] { 1, null, "superadmin@smartroom.com", "$2a$11$1ubzc9BlhI5pH8zGtblP7eBzZgDG4lTRXHr5n4FMTvjkfOulNJSFu", "SuperAdmin", "superadmin" });
+                values: new object[] { 1, null, "superadmin@smartroom.com", "$2a$11$1Wl1cZhn9umGlooYvlmTauykm5WEgpcCE9pjRqEzrSas8St/o6EcW", "SuperAdmin", "superadmin" });
 
             migrationBuilder.InsertData(
                 table: "Buildings",

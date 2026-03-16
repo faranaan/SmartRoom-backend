@@ -17,7 +17,7 @@ namespace SmartRoom.API.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.4")
+                .HasAnnotation("ProductVersion", "8.0.2")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -343,7 +343,7 @@ namespace SmartRoom.API.Migrations
                         {
                             Id = 1,
                             Email = "superadmin@smartroom.com",
-                            Password = "$2a$11$1ubzc9BlhI5pH8zGtblP7eBzZgDG4lTRXHr5n4FMTvjkfOulNJSFu",
+                            Password = "$2a$11$1Wl1cZhn9umGlooYvlmTauykm5WEgpcCE9pjRqEzrSas8St/o6EcW",
                             Role = "SuperAdmin",
                             Username = "superadmin"
                         });
