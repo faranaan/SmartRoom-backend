@@ -55,6 +55,19 @@ namespace SmartRoom.API.Controller
             }
             var rooms = await query.ToListAsync();
 
+            var now = DateTime.UtcNow;
+
+            foreach (var room in rooms)
+            {
+                bool isBooked = _context.Bookings.Any(b =>
+                    b.RoomId == room.Id &&
+                    b.Status == BookingStatus.Approved &&
+                    now >= b.StartTime &&
+                    now <= b.EndTime);
+
+                room.IsAvailable = !isBooked;
+            }
+
             return Ok(rooms);
             
         }
@@ -77,6 +90,16 @@ namespace SmartRoom.API.Controller
                 .FirstOrDefaultAsync(r => r.Id == id);
 
             if (room == null) return NotFound("Room not found.");
+
+            var now = DateTime.UtcNow;
+
+            bool isBooked = await _context.Bookings.AnyAsync(b =>
+                b.RoomId == room.Id &&
+                b.Status == BookingStatus.Approved &&
+                now >= b.StartTime &&
+                now <= b.EndTime);
+
+            room.IsAvailable = !isBooked;
 
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
             var campusIdStr = User.FindFirst("CampusId")?.Value;

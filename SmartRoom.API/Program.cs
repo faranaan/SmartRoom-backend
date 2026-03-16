@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using System.Text.Json.Serialization;
+using SmartRoom.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -74,6 +75,8 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
         });
 });
+
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 var app = builder.Build();
 

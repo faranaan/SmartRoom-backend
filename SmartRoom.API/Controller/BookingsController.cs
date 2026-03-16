@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using SmartRoom.API.Data;
 using SmartRoom.API.Models;
 using SmartRoom.API.DTOs;
+using SmartRoom.API.Services;
 using System.Security.Claims;
+
 
 namespace SmartRoom.API.Controller
 {
@@ -17,10 +19,12 @@ namespace SmartRoom.API.Controller
     public class BookingsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IEmailService _emailService;
 
-        public BookingsController(AppDbContext context)
+        public BookingsController(AppDbContext context, IEmailService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
         /// <summary>
@@ -191,7 +195,7 @@ namespace SmartRoom.API.Controller
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> UpdateBookingStatus(int id, [FromBody] BookingStatusDto request)
         {
-            var booking = await _context.Bookings.Include(b => b.Room).FirstOrDefaultAsync(b => b.Id == id);
+            var booking = await _context.Bookings.Include(b => b.User).Include(b => b.Room).FirstOrDefaultAsync(b => b.Id == id);
 
             if (booking == null)
             {
@@ -205,7 +209,7 @@ namespace SmartRoom.API.Controller
 
             if (userRole != UserRole.SuperAdmin.ToString())
             {
-                if (booking.Room.CampusId.ToString() != campusIdStr) return Forbid("You are not authorized to manage bookings from another campus.");
+                if (booking.Room?.CampusId.ToString() != campusIdStr) return Forbid("You are not authorized to manage bookings from another campus.");
             }
 
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
@@ -255,6 +259,50 @@ namespace SmartRoom.API.Controller
             _context.BookingLogs.Add(log);
 
             await _context.SaveChangesAsync();
+
+            if (booking.User != null && !string.IsNullOrEmpty(booking.User.Email))
+            {
+                if (request.Status == BookingStatus.Approved || request.Status == BookingStatus.Rejected)
+                {
+                    string statusString = request.Status.ToString();
+                    string statusColor = request.Status == BookingStatus.Approved ? "#22c55e" : "#ef4444";
+                    string subject = $"Room Booking Status Notification: {statusString}";
+
+                    string body = $@"
+                        <div style='font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px;'>
+                            <h2 style='color: #2563eb;'>SmartRoom Notification</h2>
+                            <p>Hi <strong>{booking.User.Username}</strong>,</p>
+                            <p>Your room booking request has been reviewed by the Admin:</p>
+                            
+                            <table style='width: 100%; border-collapse: collapse; margin: 20px 0;'>
+                                <tr>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee;'><strong>Room:</strong></td>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee;'>{booking.Room?.RoomName}</td>
+                                </tr>
+                                <tr>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee;'><strong>Status:</strong></td>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee; color: {statusColor}; font-weight: bold;'>{statusString.ToUpper()}</td>
+                                </tr>
+                                <tr>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee;'><strong>Admin Notes:</strong></td>
+                                    <td style='padding: 8px; border-bottom: 1px solid #eee;'>{request.Notes ?? "-"}</td>
+                                </tr>
+                            </table>
+
+                            <p>Please check your dashboard for further details.</p>
+                            <p style='color: #888; font-size: 12px; margin-top: 30px;'>This is an automated message, please do not reply.</p>
+                        </div>";
+
+                    try
+                    {
+                        await _emailService.SendEmailAsync(booking.User.Email, subject, body);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to send email: {ex.Message}");
+                    }
+                }
+            }
 
             return Ok(new { message = $"Booking status updated", status = booking.Status });
         }
